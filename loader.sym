@@ -1,0 +1,27 @@
+; this file was created with wlalink by ville helin <ville.helin@iki.fi>.
+; no$gmb symbolic information for "loader.bin".
+01:7f1f patcherCode
+01:7f2b clearSrc
+01:7f2e clearDst
+01:7f3e setSp
+01:7f41 setInterrupt
+01:7f42 setPc
+01:7f45 frontRegs
+01:7f4d patcherCodeEnd
+00:ff00 loaderId
+00:ff04 disk_name
+00:ff20 loader
+00:ff26 copyVram
+00:ff48 copyVreg
+00:ff51 copySafeRam
+00:ff5d stopMotor
+00:ff65 copyProcShadow
+00:ff72 ppiCtrl
+00:ff76 ppiPortC
+00:ff7a copyPsg
+00:ff83 jumpPatcher
+00:ff86 loaderLoop
+00:ff9e vdpRegCmds
+00:ffae shadowRegs
+00:ffba psgCmdRegs
+00:ffc6 psgCmdRegsEnd
