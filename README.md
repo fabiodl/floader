@@ -4,7 +4,7 @@ Convert SC3000 savestates to SF7000 floppies
 
 Usage 
 run mame with the console active
-`mame -window -plugin console sc3000  -cart Basic.sc  -cass mytape.wav`
+`mame -window -plugin console sc3000 -cart Basic.sc -cass mytape.wav`
 
 in MAME console, load the save script by
 `dofile("save.lua")`
