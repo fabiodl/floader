@@ -8,6 +8,7 @@ def findSpaces(mem):
     v = None
     cnt = 0
     # print("length", len(mem))
+
     for i in range(len(mem)):
         if mem[i] == v:
             cnt += 1
@@ -16,6 +17,8 @@ def findSpaces(mem):
                 space.append((cnt, i-cnt, v))
             v = mem[i]
             cnt = 1
+    if cnt > 0x10:
+        space.append((cnt, i+1-cnt, v))
     return space
 
 
@@ -39,6 +42,13 @@ def printSpace(mem):
     ss = sorted(space)
     for (cnt, addr, v) in ss:
         print(f"{cnt} at {addr:04x}-{(addr+cnt):04x} = {v:02x}")
+
+
+def printSpaceByAddr(mem):
+    space = findSpaces(mem)
+    byAddr = sorted([(addr, cnt, v) for (cnt, addr, v) in space])
+    for (addr, cnt, v) in byAddr:
+        print(f"{addr:04x}-{(addr+cnt):04x} ({cnt})= {v:02x}")
 
 
 def readSymbols(fname):
@@ -66,6 +76,7 @@ def getBigZeroSpace(mem):
     space = findSpaces(mem)
     ss = sorted(space, reverse=True)
     for (cnt, addr, v) in ss:
+        print(f"{cnt},{addr:04x},{v:02x}")
         if v == 0x00 and addr < 0xFC00:
             return addr
     return 0xC000
@@ -106,8 +117,10 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
 
     if not isSingleVal(outData[RAM_START+FC00_SRC:RAM_START + FC00_SRC +
                                FC00_SIZE], 0x00):
-        print("HIGH RAM IS OVERWRITING STUFF")
+        print(
+            f"HIGH RAM IS OVERWRITING STUFF at {FC00_SRC:04x}-{FC00_SRC +FC00_SIZE:04x}")
         plotMap(parts["mem"])
+        printSpaceByAddr(parts["mem"])
 
     outData[RAM_START+FC00_SRC:RAM_START + FC00_SRC +
             FC00_SIZE] = parts["mem"][0xFC00:0xFC00+FC00_SIZE]

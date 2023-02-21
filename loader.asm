@@ -82,8 +82,11 @@ disk_name:
 loader:
   call 8      ;track 0
   jp c,0      ;reboot on error
-
-
+turnOffDisplay:
+  ld hl,  ((VDPCMD_REG|$01)<<8)|$80
+  ld c,PORT_VDP_CMD
+  out (c),l
+  out (c),h
 copyVram:
   ld de,VRAM_BUFFER_ADDR  ;load start address
   ld bc,(SECTOR_VRAM_START<<8)|TRACK_VRAM_START ;start sector b track c ;sectors start from 1
@@ -102,7 +105,6 @@ copyVram:
 -:otir  ;(C)=(hl)
   cp h
   jp nz,-
-
 copySafeRam:
   ld de,$0000
   ld bc,(SECTOR_RAM_START<<8)|TRACK_RAM_START ;start sector b track c ;sectors start from 1
@@ -114,16 +116,6 @@ stopMotor:
   out ($E7),a
   ld a,$D      ;select
   out ($E7),a  ;0~3FFFF -> ram #1
-copyProcShadow:
-  ld sp,shadowRegs
-  pop af
-  pop bc
-  pop de
-  pop hl
-  exx
-  ex af,af'
-  pop ix
-  pop iy
 ppiCtrl:
   ld a,PLACEHOLDER_8
   out (PORT_PPI_CTRL),a
@@ -135,14 +127,23 @@ copyVreg:
   ld hl,vdpRegCmds
   ld b,16
   otir
+copyProcShadow:
+  ld sp,shadowRegs
+  pop af
+  pop bc
+  pop de
+  pop hl
+  exx
+  ex af,af'
+  pop ix
+  pop iy
 copyPsg:
   ld c,PORT_PSG
   ld hl,psgCmdRegs
   ld b,psgCmdRegsEnd-psgCmdRegs
   otir
 jumpPatcher:
-   jp patcherCode
-
+  jp patcherCode
 
 
 loaderLoop:
