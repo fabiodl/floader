@@ -103,12 +103,6 @@ copyVram:
   cp h
   jp nz,-
 
-copyVreg:
-  ld c,PORT_VDP_CMD
-  ld hl,vdpRegCmds
-  ld b,16
-  otir
-
 copySafeRam:
   ld de,$0000
   ld bc,(SECTOR_RAM_START<<8)|TRACK_RAM_START ;start sector b track c ;sectors start from 1
@@ -136,6 +130,11 @@ ppiCtrl:
 ppiPortC:
   ld a,PLACEHOLDER_8
   out (PORT_PPI_C),a
+copyVreg:
+  ld c,PORT_VDP_CMD
+  ld hl,vdpRegCmds
+  ld b,16
+  otir
 copyPsg:
   ld c,PORT_PSG
   ld hl,psgCmdRegs
