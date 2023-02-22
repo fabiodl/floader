@@ -61,21 +61,21 @@ disk_name:
 ;tracks are numbered 0 to 39, but we start placing at 1
 ;
 ;  track 01 02 03 04 05 06 07 08 09 0A 0B 0C 0E 0E 0F 10 ;RAM addr 0000 1000 .... F000
-;        11 12 13 14 ;VRAM
+;        15 16 17 18 ;VRAM
 ;
 ; the IPL uses needs mem from FC00
 
-.define TRACK_VRAM_START $11
-.define SECTOR_VRAM_START $01
-.define TRACK_VRAM_END $14
-.define SECTOR_VRAM_END $10
-.define VRAM_BUFFER_ADDR $8000
 
 .define TRACK_RAM_START  $01
 .define SECTOR_RAM_START  $01
 .define TRACK_RAM_END  $10
 .define SECTOR_SAFE_RAM_END  $0C
 
+.define TRACK_VRAM_START $15
+.define SECTOR_VRAM_START $01
+.define TRACK_VRAM_END $18
+.define SECTOR_VRAM_END $10
+.define VRAM_BUFFER_ADDR $8000
 
 
 .org $20

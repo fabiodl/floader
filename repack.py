@@ -1,6 +1,9 @@
 import numpy as np
 import unpackMame
 import sys
+import scfloppy
+import datetime
+import zlib
 
 
 def findSpaces(mem):
@@ -85,55 +88,46 @@ def getBigZeroSpace(mem):
 def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
 
     with open(loadername+".bin", "rb") as f:
-        loaderData = f.read()
+        loaderBinData = f.read()
+        loaderData = bytearray(loaderBinData[:0x100])
     sym = readSymbols(loadername+".sym")
-
-    outData = bytearray([0xFF]*(256*16*40))
-
-    LOADER_START = 0
-    LOADER_SIZE = 256
-    RAM_START = 256*16*0x01
-    RAM_SIZE = 64*1024
-    VRAM_START = 256*16*0x11
-    VRAM_SIZE = 16*1024
 
     FC00_SRC = getBigZeroSpace(parts["mem"])
     FC00_SIZE = 0x400
 
-    outData[LOADER_START:LOADER_START+LOADER_SIZE] = loaderData[:LOADER_SIZE]
-    outData[RAM_START:RAM_START+RAM_SIZE] = parts["mem"]
-    outData[VRAM_START:VRAM_START+VRAM_SIZE] = parts["vram"]
+    ramData = bytearray(parts["mem"])
+    vramData = bytearray(parts["vram"])
 
     patcherCodeStart = sym["patcherCode"][1]
     patcherCodeSize = sym["patcherCodeEnd"][1]-patcherCodeStart
 
-    if not isSingleVal(outData[RAM_START + patcherCodeStart:
-                               RAM_START + patcherCodeStart+patcherCodeSize], 0xFF):
+    if not isSingleVal(ramData[patcherCodeStart:
+                               patcherCodeStart+patcherCodeSize],
+                       0xFF):
         print("PATCHER CODE IS OVERWRITING STUFF")
 
-    outData[RAM_START + patcherCodeStart:
-            RAM_START + patcherCodeStart+patcherCodeSize] = loaderData[
-                0x100:0x100+patcherCodeSize]
+    ramData[patcherCodeStart:patcherCodeStart+patcherCodeSize] = loaderBinData[
+        0x100:0x100+patcherCodeSize]
 
-    if not isSingleVal(outData[RAM_START+FC00_SRC:RAM_START + FC00_SRC +
-                               FC00_SIZE], 0x00):
-        print(
-            f"HIGH RAM IS OVERWRITING STUFF at {FC00_SRC:04x}-{FC00_SRC +FC00_SIZE:04x}")
+    if not isSingleVal(ramData[FC00_SRC:FC00_SRC + FC00_SIZE], 0x00):
+        print(f"HIGH RAM IS OVERWRITING STUFF at {FC00_SRC:04x}-" +
+              f"{FC00_SRC + FC00_SIZE:04x}")
         plotMap(parts["mem"])
         printSpaceByAddr(parts["mem"])
 
-    outData[RAM_START+FC00_SRC:RAM_START + FC00_SRC +
-            FC00_SIZE] = parts["mem"][0xFC00:0xFC00+FC00_SIZE]
+    ramData[FC00_SRC:FC00_SRC + FC00_SIZE] = parts["mem"][
+        0xFC00:0xFC00+FC00_SIZE]
 
     def put(symbol, vals, offset=0):
         sp = sym[symbol]
         if sp[0] == 0:
-            start = LOADER_START-0xFF00
+            offset -= 0xFF00
+            target = loaderData
         else:
-            start = RAM_START
-        start += sp[1]+offset
-        outData[start:start+len(vals)] = vals
-        #print(f"put {hexString(vals)} at {start:04x}")
+            target = ramData
+        addr = sp[1]+offset
+        target[addr:addr+len(vals)] = vals
+        # print(f"put {hexString(vals)} at {start:04x}")
 
     def putCpuReg(loc, regNames, offset=0):
         cpuVals = [parts["cpu"][r] for r in regNames]
@@ -181,9 +175,8 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
     put("ppiCtrl", [parts["ppi"][0]], 1)
     put("ppiPortC", [parts["ppi"][1]], 1)
 
-    s = sum(outData[RAM_START:RAM_START+0x7FFF]) -\
-        sum(outData[RAM_START+FC00_SRC:RAM_START + FC00_SRC +
-                    FC00_SIZE])
+    s = sum(ramData[0:0x7FFF]) -\
+        sum(ramData[FC00_SRC:FC00_SRC + FC00_SIZE])
 
     NAMELEN = 0x20-4
     dname = bytearray((" "*NAMELEN).encode("utf-8"))
@@ -199,12 +192,33 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
     put("clearSrc", srcAddr, 1)
     put("clearDst", dstAddr, 1)
 
-    outData[RAM_START+0x7FFF] = 0x100 - (s & 0xFF)
+    ramData[0x7FFF] = 0x100 - (s & 0xFF)
 
-    with open(outname, "wb") as outFile:
-        outFile.write(outData)
-        print("length ", len(outData))
+    f = scfloppy.Floppy()
+    f.format()
+    f.addSystem(scfloppy.trackSectorToCluster(0x00, 0), loaderData)
+    f.addSystem(scfloppy.trackSectorToCluster(0x01, 0), ramData)
+    f.addSystem(scfloppy.trackSectorToCluster(0x15, 0), vramData)
 
+    now = datetime.datetime.now()
+    info = "Tool URL: github.com/fabiodl/floader\r\n"
+
+    names = ["Loader", "RAM   ", "VRAM  "]
+    data = [loaderData, ramData, vramData]
+    for n, d in zip(names, data):
+        info += f"{n} hash: {zlib.crc32(d):08X}\r\n"
+    info += "Creation time: "+now.strftime("%Y %b %d - %H:%M:%S\r\n")
+    info += f"\r\n Type BOOT to launch {diskname}\r\n"
+    content = info.encode("UTF-8")
+    chunk = bytearray(content) + \
+        bytearray([0x1A]+([0x00]*(0x100-len(content)-1)))
+
+    f.addFile(scfloppy.canonicalName("INFO.BAS"),
+              open("info.bas", "rb").read())
+    f.addFile(scfloppy.canonicalName("INFO.TXT"), chunk,
+              scfloppy.ATTRIBUTE_ASCII)
+
+    f.save(outname)
     print("Wrote", outname)
 
 
