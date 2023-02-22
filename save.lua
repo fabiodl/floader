@@ -4,7 +4,7 @@
 function dumpPsg(f)
    local psg = manager.machine.devices[":sn76489an"]
    local psgreg = emu.item(psg.items["0/m_register"])
-   local last=emu.item(psg.items["0/m_last_register"])      
+   local last=emu.item(psg.items["0/m_last_register"])
    --tone 0
    --vol 0
    --tone 1
@@ -20,7 +20,7 @@ function dumpPsg(f)
 end
 
 
-function dumpRam(f)   
+function dumpRam(f)
    local cpu=manager.machine.devices[":z80"]
    local mem=cpu.spaces["program"]
    for addr = 0, 0xFFFF do
@@ -33,7 +33,7 @@ end
 function dumpCpu(f)
 
    local cpu=manager.machine.devices[":z80"]
-   
+
    local regs={"AF","BC","DE","HL","IX","IY",
       "AF2","BC2","DE2","HL2","SP","PC","IFF1","IFF2"
    }
@@ -43,9 +43,9 @@ function dumpCpu(f)
       -- print(reg,cpu.state[reg])
       f:write(string.pack("I2<",val))
    end
-  
-   
-end  
+
+
+end
 
 
 
@@ -62,8 +62,8 @@ function dumpVdp(f)
       -- print(string.format("%02x",v))
       f:write(string.char(v))
    end
-   
-end   
+
+end
 
 function dumpPPI(f)
    -- A input
@@ -74,7 +74,7 @@ function dumpPPI(f)
    local ppiControl = emu.item(ppi.items["0/m_control"]):read(0)
    local ppiC = emu.item(ppi.items["0/m_output"]):read(2)
    f:write(string.char(ppiControl))
-   f:write(string.char(ppiC))   
+   f:write(string.char(ppiC))
 end
 
 
@@ -91,43 +91,59 @@ end
 
 
 
-function waitGood(limit)
+function isGood()
    local cpu=manager.machine.devices[":z80"]
    local psg = manager.machine.devices[":sn76489an"]
    local psgreg = emu.item(psg.items["0/m_register"])
-   clocks=0
-      
-   for clocks=0,limit do
-      emu.step()
-      local sound=false
-      local intr=cpu.state["IFF1"].value~=cpu.state["IFF2"].value
-      for i=1,7,2 do
-         if psgreg:read(i)~=0xF then
-            sound=true
-            break
-         end
-      end      
-      if  not intr and not sound then
+
+   local intr=cpu.state["IFF1"].value~=cpu.state["IFF2"].value
+   local sound=false
+
+   for i=1,7,2 do
+      if psgreg:read(i)~=0xF then
+         sound=true
          break
       end
    end
-   return intr,sound 
+
+   return intr,sound
 end
 
 
+
+function save_callback()
+   if outFilename~=nil then
+      if manager.machine.paused then
+         local intr,sound=isGood()
+         local saveReady= (not intr and not sound) or manager.machine.time.seconds>timeLimit
+         if saveReady then
+            if intr then
+               print("warning, inside interrupt")
+            end
+            if sound then
+               print("warning, sound active")
+            end
+            dump(outFilename)
+            print("Save of "..outFilename.." complete")
+            outFilename=nil
+            emu.unpause()
+         else
+            emu.step()
+         end
+      end
+   end
+end
+
+
+
 function save(filename)
+   if not callbackRegistered then
+      emu.register_frame_done(save_callback)
+      callbackRegistered=true
+   end
+   timeLimit=manager.machine.time.seconds+5
+   outFilename = filename or "out.bin"
    emu.pause()
-   filename = filename or "out.bin"
-   intr,sound=waitGood(20000000)
-   if intr then
-      print("warning, inside interrupt")
-   end
-   if sound then
-      print("warning, sound active")
-   end
-   dump(filename)
-   print("Save of "..filename.." complete")
-   emu.unpause()
 end
 
 
