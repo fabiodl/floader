@@ -4,6 +4,7 @@ import sys
 import scfloppy
 import datetime
 import zlib
+import argparse
 
 
 def findSpaces(mem):
@@ -85,11 +86,17 @@ def getBigZeroSpace(mem):
     return 0xC000
 
 
-def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
+def le16(x):
+    return [x & 0xFF, x >> 8]
+
+
+def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
+               patcherLoc=None, fix_checksum=True):
 
     with open(loadername+".bin", "rb") as f:
         loaderBinData = f.read()
         loaderData = bytearray(loaderBinData[:0x100])
+        patcherData = bytearray(loaderBinData[0x100:])
     sym = readSymbols(loadername+".sym")
 
     FC00_SRC = getBigZeroSpace(parts["mem"])
@@ -101,13 +108,32 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
     patcherCodeStart = sym["patcherCode"][1]
     patcherCodeSize = sym["patcherCodeEnd"][1]-patcherCodeStart
 
-    if not isSingleVal(ramData[patcherCodeStart:
-                               patcherCodeStart+patcherCodeSize],
+    if patcherLoc is None:
+        patcherLoc = patcherCodeStart
+
+    def put(symbol, vals, offset=0):
+        sp = sym[symbol]
+        if sp[0] == 0:  # loader
+            offset -= 0xFF00
+            target = loaderData
+        else:  # patcher
+            target = ramData
+            offset += patcherLoc-patcherCodeStart
+        addr = sp[1]+offset
+        target[addr:addr+len(vals)] = vals
+        # print(f"put {hexString(vals)} at {start:04x}")
+
+    if not isSingleVal(ramData[patcherLoc:
+                               patcherLoc+patcherCodeSize],
                        0xFF):
         print("PATCHER CODE IS OVERWRITING STUFF")
 
-    ramData[patcherCodeStart:patcherCodeStart+patcherCodeSize] = loaderBinData[
-        0x100:0x100+patcherCodeSize]
+    ramData[patcherLoc:patcherLoc +
+            patcherCodeSize] = patcherData[:patcherCodeSize]
+
+    put("jumpPatcher", le16(patcherLoc), 1)
+    frontRegsLoc = sym["frontRegs"][1]+patcherLoc-patcherCodeStart
+    put("loadFrontRegs", le16(frontRegsLoc), 1)
 
     if not isSingleVal(ramData[FC00_SRC:FC00_SRC + FC00_SIZE], 0x00):
         print(f"HIGH RAM IS OVERWRITING STUFF at {FC00_SRC:04x}-" +
@@ -117,17 +143,6 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
 
     ramData[FC00_SRC:FC00_SRC + FC00_SIZE] = parts["mem"][
         0xFC00:0xFC00+FC00_SIZE]
-
-    def put(symbol, vals, offset=0):
-        sp = sym[symbol]
-        if sp[0] == 0:
-            offset -= 0xFF00
-            target = loaderData
-        else:
-            target = ramData
-        addr = sp[1]+offset
-        target[addr:addr+len(vals)] = vals
-        # print(f"put {hexString(vals)} at {start:04x}")
 
     def putCpuReg(loc, regNames, offset=0):
         cpuVals = [parts["cpu"][r] for r in regNames]
@@ -175,24 +190,27 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
     put("ppiCtrl", [parts["ppi"][0]], 1)
     put("ppiPortC", [parts["ppi"][1]], 1)
 
-    s = sum(ramData[0:0x7FFF]) -\
-        sum(ramData[FC00_SRC:FC00_SRC + FC00_SIZE])
-
     NAMELEN = 0x20-4
     dname = bytearray((" "*NAMELEN).encode("utf-8"))
     for i, c in enumerate(diskname):
         if i < NAMELEN:
             dname[i] = ord(c)
+    if len(diskname) > NAMELEN:
+        print("WARNING: diskname truncated to", dname)
 
     put("disk_name", dname)
 
-    srcAddr = [FC00_SRC & 0xFF, FC00_SRC >> 8]
-    dstAddr = [(FC00_SRC+1) & 0xFF, (FC00_SRC+1) >> 8]
+    srcAddr = le16(FC00_SRC)
+    dstAddr = le16(FC00_SRC+1)
     put("patcherCode", srcAddr, 1)
     put("clearSrc", srcAddr, 1)
     put("clearDst", dstAddr, 1)
 
-    ramData[0x7FFF] = 0x100 - (s & 0xFF)
+    if fix_checksum:
+        s = sum(ramData[0:0x7FFF]) -\
+            sum(ramData[FC00_SRC:FC00_SRC + FC00_SIZE])
+
+        ramData[0x7FFF] = 0x100 - (s & 0xFF)
 
     f = scfloppy.Floppy()
     f.format()
@@ -204,7 +222,7 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
     info = "Tool URL: github.com/fabiodl/floader\r\n"
 
     names = ["Loader", "RAM   ", "VRAM  "]
-    data = [loaderData, ramData, vramData]
+    data = [loaderData, bytearray(parts["mem"]), vramData]
     for n, d in zip(names, data):
         info += f"{n} hash: {zlib.crc32(d):08X}\r\n"
     info += "Creation time: "+now.strftime("%Y %b %d - %H:%M:%S\r\n")
@@ -223,8 +241,17 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA"):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Usage "+sys.argv[0]+" inputFile outputFile diskname")
-    else:
-        parts = unpackMame.decomposeSavefile(sys.argv[1])
-        makeFloppy("loader", parts, sys.argv[2], sys.argv[3])
+    parser = argparse.ArgumentParser(
+        description='Convert savestates to bootable floppy images')
+    parser.add_argument("input")
+    parser.add_argument("output")
+    parser.add_argument("diskname")
+    parser.add_argument("--patcher_addr", required=False)
+    parser.add_argument(
+        '--fix_checksum', action=argparse.BooleanOptionalAction, default=True)
+    args = parser.parse_args()
+    patcher_addr = int(args.patcher_addr, 16) if args.patcher_addr else None
+    parts = unpackMame.decomposeSavefile(sys.argv[1])
+    makeFloppy("loader", parts, args.output, args.diskname,
+               patcher_addr, args.fix_checksum
+               )

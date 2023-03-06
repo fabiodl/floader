@@ -24,6 +24,7 @@ clearDst:
   ld (hl),a
   ld bc,FC00_SIZE
   ldir
+loadFrontRegs:
   ld sp,frontRegs
   pop af
   pop bc
