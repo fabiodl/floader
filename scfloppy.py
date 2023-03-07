@@ -40,6 +40,7 @@ class Floppy:
 
     def __init_(self):
         self.format()
+        self.verbose=True
 
     def open(self, filename):
         self.filename = filename
@@ -145,7 +146,8 @@ class Floppy:
         fs = (FATTRACK*SECTORSPERTRACK+FATSECTOR)*SECTORSIZE
         csize = math.ceil(len(data) / (SECTORSPERCLUSTER*SECTORSIZE))
         self.data[fs+cluster:fs+cluster+csize] = bytes([0xFE]*csize)
-        print("adding system data,", len(data), "bytes",
+        if self.verbose:
+            print("adding system data,", len(data), "bytes",
               "using", csize, "clusters from cluster", cluster)
 
     def getFile(self, name):
@@ -221,7 +223,8 @@ class Floppy:
             es = ds+f*DIRENTRYLEN
             if self.data[es] == 0x00:
                 self.data[es:es+DIRENTRYLEN] = entry
-                print("Added entry", entry)
+                if self.verbose:
+                    print("Added entry", entry)
                 entryRec = True
                 break
         if not entryRec:
