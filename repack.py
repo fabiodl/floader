@@ -5,6 +5,7 @@ import sys
 import scfloppy
 import zlib
 import argparse
+import pathlib
 
 
 def findSpaces(mem):
@@ -88,6 +89,10 @@ def getBigZeroSpace(mem):
 
 def le16(x):
     return [x & 0xFF, x >> 8]
+
+
+def thisDir():
+    return pathlib.Path(__file__).resolve().parent
 
 
 def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
@@ -233,7 +238,7 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
         bytearray([0x1A]+([0x00]*(0x100-len(content)-1)))
 
     f.addFile(scfloppy.canonicalName("INFO.BAS"),
-              open("info.bas", "rb").read())
+              open(thisDir()/"info.bas", "rb").read())
     f.addFile(scfloppy.canonicalName("INFO.TXT"), chunk,
               scfloppy.ATTRIBUTE_ASCII)
 
@@ -254,6 +259,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     patcher_addr = int(args.patcher_addr, 16) if args.patcher_addr else None
     parts = unpackMame.decomposeSavefile(sys.argv[1])
-    makeFloppy("loader", parts, args.output, args.diskname,
+    makeFloppy(str(thisDir()/"loader"), parts, args.output, args.diskname,
                patcher_addr, args.fix_checksum
                )
