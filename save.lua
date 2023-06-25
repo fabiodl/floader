@@ -142,7 +142,7 @@ function save(filename)
       callbackRegistered=true
    end
    timeLimit=manager.machine.time.seconds+5
-   outFilename = filename or "out.bin"
+   outFilename = filename or string.sub(mame_manager.machine.images:at(2).filename,1,-5)..".scr"
    emu.pause()
 end
 
