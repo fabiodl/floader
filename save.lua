@@ -115,7 +115,7 @@ function save_callback()
    if outFilename~=nil then
       if manager.machine.paused then
          local intr,sound=isGood()
-         local saveReady= (not intr and not sound) or manager.machine.time.seconds>timeLimit
+         local saveReady= (not intr and not sound) or manager.machine.time.seconds>=timeLimit
          if saveReady then
             if intr then
                print("warning, inside interrupt")
@@ -136,12 +136,16 @@ end
 
 
 
-function save(filename)
+function save(filename,now)
    if not callbackRegistered then
       emu.register_frame_done(save_callback)
       callbackRegistered=true
    end
-   timeLimit=manager.machine.time.seconds+5
+   if now then
+      timeLimit=manager.machine.time.seconds
+   else
+      timeLimit=manager.machine.time.seconds+5
+   end
    outFilename = filename or string.sub(mame_manager.machine.images:at(2).filename,1,-5)..".scr"
    emu.pause()
 end

@@ -215,7 +215,7 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
         s = sum(ramData[0:0x7FFF]) -\
             sum(ramData[FC00_SRC:FC00_SRC + FC00_SIZE])
 
-        ramData[0x7FFF] = 0x100 - (s & 0xFF)
+        ramData[0x7FFF] = (0x100 - (s & 0xFF)) & 0xFF
 
     f = scfloppy.Floppy()
     f.verbose = False
@@ -223,6 +223,9 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
     f.addSystem(scfloppy.trackSectorToCluster(0x00, 0), loaderData)
     f.addSystem(scfloppy.trackSectorToCluster(0x01, 0), ramData)
     f.addSystem(scfloppy.trackSectorToCluster(0x15, 0), vramData)
+
+    # plotMap(ramData)
+    # plotMap(vramData)
 
     info = "Tool URL: github.com/fabiodl/floader\r\n"
 
