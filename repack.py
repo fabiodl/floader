@@ -82,9 +82,9 @@ def getBigZeroSpace(mem):
     ss = sorted(space, reverse=True)
     for (cnt, addr, v) in ss:
         # print(f"{cnt},{addr:04x},{v:02x}")
-        if v == 0x00 and addr < 0xFC00:
-            return addr
-    return 0xC000
+        if v == 0x00:
+            return addr, cnt
+    return 0xC000, 0
 
 
 def le16(x):
@@ -93,6 +93,14 @@ def le16(x):
 
 def thisDir():
     return pathlib.Path(__file__).resolve().parent
+
+
+def deleteHeadVal(mem, maxdel):
+    i = 0
+    val = mem[0]
+    while mem[i] == val and i < maxdel:
+        i = i+1
+    return val, mem[i:]
 
 
 def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
@@ -133,21 +141,38 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
     ramData[patcherLoc:patcherLoc +
             patcherCodeSize] = patcherData[:patcherCodeSize]
 
-    put("jumpPatcher", le16(patcherLoc), 1)
-    frontRegsLoc = sym["frontRegs"][1]+patcherLoc-patcherCodeStart
-    put("loadFrontRegs", le16(frontRegsLoc), 1)
+    fcchunk = parts["mem"][0xFC00:0x10000]
+    fcsrc, fcavail = getBigZeroSpace(parts["mem"][:0xFC00])
 
-    FC00_SRC = getBigZeroSpace(parts["mem"])
-    FC00_SIZE = 0x400
+    if fcavail >= 0x400:
+        put("jumpPatcher", le16(patcherLoc), 1)
+        fcsize = len(fcchunk)
+    else:
+        put("jumpPatcher", le16(sym["clearFCHead"][1]), 1)
+        put("endFChead", le16(patcherLoc), 1)
+        fcval, fcchunk = deleteHeadVal(fcchunk, sym["clearFCexec"][1]-0xFC00)
+        fcsize = len(fcchunk)
 
-    if not isSingleVal(ramData[FC00_SRC:FC00_SRC + FC00_SIZE], 0x00):
-        print(f"HIGH RAM IS OVERWRITING STUFF at {FC00_SRC:04x}-" +
-              f"{FC00_SRC + FC00_SIZE:04x}")
+        put("clearFCHead", [fcval], 1)
+        put("clearFCHeadSize", le16(0x400-fcsize), 1)
+        put("fcDest", le16(0x10000-fcsize), 1)
+        put("fcSize", le16(fcsize), 1)
+
+    put("patcherCode", le16(fcsrc), 1)
+    put("clearSrc", le16(fcsrc), 1)
+    put("clearDst", le16(fcsrc+1), 1)
+    put("clearSize", le16(fcsize), 1)
+
+    if not isSingleVal(ramData[fcsrc:fcsrc+len(fcchunk)], 0x00):
+        print(f"HIGH RAM IS OVERWRITING STUFF at {fcsrc:04x}-" +
+              f"{fcsrc + len(fcchunk):04x}")
         plotMap(parts["mem"])
         printSpaceByAddr(parts["mem"])
 
-    ramData[FC00_SRC:FC00_SRC + FC00_SIZE] = parts["mem"][
-        0xFC00:0xFC00+FC00_SIZE]
+    ramData[fcsrc:fcsrc+len(fcchunk)] = fcchunk
+
+    frontRegsLoc = sym["frontRegs"][1]+patcherLoc-patcherCodeStart
+    put("loadFrontRegs", le16(frontRegsLoc), 1)
 
     def putCpuReg(loc, regNames, offset=0):
         cpuVals = [parts["cpu"][r] for r in regNames]
@@ -205,16 +230,10 @@ def makeFloppy(loadername, parts, outname, diskname="SAVEDATA",
 
     put("disk_name", dname)
 
-    srcAddr = le16(FC00_SRC)
-    dstAddr = le16(FC00_SRC+1)
-    put("patcherCode", srcAddr, 1)
-    put("clearSrc", srcAddr, 1)
-    put("clearDst", dstAddr, 1)
-
     if fix_checksum:
-        s = sum(ramData[0:0x7FFF]) -\
-            sum(ramData[FC00_SRC:FC00_SRC + FC00_SIZE])
-
+        finalRam = bytearray(ramData)
+        finalRam[fcsrc:fcsrc+len(fcchunk)] = bytes([0]*len(fcchunk))
+        s = sum(finalRam[0:0x7FFF])
         ramData[0x7FFF] = (0x100 - (s & 0xFF)) & 0xFF
 
     f = scfloppy.Floppy()

@@ -1,8 +1,11 @@
 ; this file was created with wlalink by ville helin <ville.helin@iki.fi>.
 ; no$gmb symbolic information for "loader.bin".
 01:7f1f patcherCode
+01:7f22 fcDest
+01:7f25 fcSize
 01:7f2b clearSrc
 01:7f2e clearDst
+01:7f32 clearSize
 01:7f37 loadFrontRegs
 01:7f3e setSp
 01:7f41 setInterrupt
@@ -27,3 +30,7 @@
 00:ffb7 shadowRegs
 00:ffc3 psgCmdRegs
 00:ffcf psgCmdRegsEnd
+00:ffcf clearFCHead
+00:ffd8 clearFCHeadSize
+00:ffdb clearFCexec
+00:ffdd endFChead

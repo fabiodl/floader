@@ -13,7 +13,9 @@
 .org 0
 patcherCode:
   ld hl,FC00_SRC_ADDR
+fcDest:
   ld de,$FC00
+fcSize:
   ld bc,FC00_SIZE
   ldir
   xor a
@@ -22,6 +24,7 @@ clearSrc:
 clearDst:
   ld de,FC00_SRC_ADDR+1
   ld (hl),a
+clearSize:
   ld bc,FC00_SIZE
   ldir
 loadFrontRegs:
@@ -144,7 +147,7 @@ copyPsg:
   ld b,psgCmdRegsEnd-psgCmdRegs
   otir
 jumpPatcher:
-  jp patcherCode
+  jp patcherCode  ; this is replaced to chain clearFcHead
 
 
 loaderLoop:
@@ -193,7 +196,17 @@ psgCmdRegs:
 .db PLACEHOLDER_8                      ;latch
 psgCmdRegsEnd:
 
-
+clearFCHead:
+  ld a,PLACEHOLDER_8
+  ld hl,$FC00
+  ld de,$FC01
+  ld (hl),a
+clearFCHeadSize:
+  ld bc,PLACEHOLDER_16
+clearFCexec:
+  ldir
+endFChead:
+  jp patcherCode
 
 
 
