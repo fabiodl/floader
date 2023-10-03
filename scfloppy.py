@@ -38,9 +38,9 @@ def trackSectorToCluster(track, sector):
 
 class Floppy:
 
-    def __init_(self):
+    def __init__(self):
         self.format()
-        self.verbose=True
+        self.verbose = True
 
     def open(self, filename):
         self.filename = filename
@@ -148,7 +148,7 @@ class Floppy:
         self.data[fs+cluster:fs+cluster+csize] = bytes([0xFE]*csize)
         if self.verbose:
             print("adding system data,", len(data), "bytes",
-              "using", csize, "clusters from cluster", cluster)
+                  "using", csize, "clusters from cluster", cluster)
 
     def getFile(self, name):
         start, _ = self.files[name]
