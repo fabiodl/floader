@@ -10,7 +10,7 @@ in MAME console, load the save script by
 `dofile("save.lua")`
 
 in MAME console when desired, save the state by
-`save("mystate.bin")`
+`save("mystate.bin",True)`
 
 convert the save state to floppy by
 `python3 repack.py mystate.bin myfloppy.sf7 "MY SAVE"`
